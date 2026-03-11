@@ -467,6 +467,7 @@ class Blockchain(util.PrintError):
 
     # cached Anchor, per-Blockchain instance, only used if the checkpoint for this network is *behind* the anchor block
     _cached_asert_anchor: Optional[asert_daa.Anchor] = None
+    _cached_asert_v2_anchor: Optional[asert_daa.Anchor] = None
 
     def get_asert_anchor(self, prevheader, mtp, chunk=None):
         """Returns the asert_anchor either from Networks.net if hardcoded or
@@ -501,6 +502,24 @@ class Blockchain(util.PrintError):
             mtp = prev_mtp
             anchor = prev
 
+    def get_asert_v2_anchor(self, chunk=None):
+        """Returns the anchor for the v2 DAA (12-hour half-life).
+        Per consensus: anchor is at (DAA_V2_HEIGHT - 1), using that block's
+        nBits and its previous block's timestamp."""
+        daa_v2 = getattr(networks.net, 'asert_daa_v2', None)
+        if daa_v2 is not None and daa_v2.anchor is not None:
+            return daa_v2.anchor
+        if self._cached_asert_v2_anchor is not None:
+            return self._cached_asert_v2_anchor
+        anchor_height = networks.net.DAA_V2_HEIGHT - 1
+        anchor_header = self.read_header(anchor_height, chunk)
+        prev_header = self.read_header(anchor_height - 1, chunk)
+        if anchor_header is None or prev_header is None:
+            self.print_error("get_asert_v2_anchor: missing headers at anchor height {}".format(anchor_height))
+            return None
+        self._cached_asert_v2_anchor = asert_daa.Anchor(anchor_height, anchor_header['bits'], prev_header['timestamp'])
+        return self._cached_asert_v2_anchor
+
     def get_bits(self, header, chunk=None):
         '''Return bits for the given height.'''
         # Difficulty adjustment interval?
@@ -526,6 +545,15 @@ class Blockchain(util.PrintError):
                 # testnet 20 minute rule
                 if header_ts - prev_ts > 20*60:
                     return MAX_BITS
+
+            # DAA v2: 12-hour half-life from DAA_V2_HEIGHT
+            daa_v2_height = getattr(networks.net, 'DAA_V2_HEIGHT', None)
+            if daa_v2_height is not None and height >= daa_v2_height:
+                anchor = self.get_asert_v2_anchor(chunk)
+                assert anchor is not None, "Failed to find ASERT v2 anchor block for chain {!r}".format(self)
+                return networks.net.asert_daa_v2.next_bits_aserti3_2d(anchor.bits,
+                                                                      prev_ts - anchor.prev_time,
+                                                                      prevheight - anchor.height)
 
             anchor = self.get_asert_anchor(prior, daa_mtp, chunk)
             assert anchor is not None, "Failed to find ASERT anchor block for chain {!r}".format(self)

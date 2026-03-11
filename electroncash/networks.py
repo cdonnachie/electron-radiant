@@ -80,6 +80,12 @@ class MainNet(AbstractNet):
     # after the anchor must specify the anchor as well.
     asert_daa.anchor = Anchor(height=18206, bits=453224288, prev_time=1657404650)
 
+    # DAA v2: HALF_LIFE changed from 2 days to 12 hours at this height
+    DAA_V2_HEIGHT = 410000
+    asert_daa_v2 = ASERTDaa(is_testnet=False)
+    asert_daa_v2.HALF_LIFE = 12 * 3600  # 12 hours
+    asert_daa_v2.anchor = Anchor(height=409999, bits=0x1a008d39, prev_time=1773088826)
+
     # Version numbers for BIP32 extended keys
     # standard: xprv, xpub
     XPRV_HEADERS = {
