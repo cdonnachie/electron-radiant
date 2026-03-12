@@ -19,7 +19,7 @@ EC_PACKAGE_VERSION=`git_describe_filtered` || fail "Could not get determine git 
 # PACKAGE_VERSION declared in electroncash/version.py instead.
 if ! echo "$EC_PACKAGE_VERSION" | grep -qE '^[0-9]+\.[0-9]'; then
     warn "git describe returned '$EC_PACKAGE_VERSION' (no version tag found), falling back to PACKAGE_VERSION from version.py"
-    EC_PACKAGE_VERSION=$(grep -oP "(?<=PACKAGE_VERSION\s{1,10}=\s{1,10}')[^']+" electroncash/version.py) \
+    EC_PACKAGE_VERSION=$(grep "^PACKAGE_VERSION" electroncash/version.py | sed "s/.*'\(.*\)'.*/\1/") \
         || fail "Could not read PACKAGE_VERSION from electroncash/version.py"
 fi
 EC_PACKAGE_NAME="${PACKAGE}"
