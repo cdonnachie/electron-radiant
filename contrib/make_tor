@@ -17,6 +17,23 @@ fi
 if [ "$BUILD_TYPE" != "darwin" ] ; then
     EXTRA_FLAGS="$EXTRA_FLAGS --enable-static-tor"
 fi
+if [ "$BUILD_TYPE" = "darwin" ] ; then
+    # On macOS 15+ (Xcode 16+), the linker rejects archives with multiple SYMDEF
+    # entries. combine_libs uses ar+ranlib to merge sub-archives, but automake
+    # also calls ranlib on libtor.a afterwards, creating a second SYMDEF.
+    # Replace combine_libs with a macOS-native xcrun libtool -static version
+    # which merges archives correctly with exactly one SYMDEF entry.
+    cat > scripts/build/combine_libs << 'COMBINE_LIBS_EOF'
+#!/bin/sh
+set -e
+TARGET="$1"
+shift
+xcrun libtool -static -o "$TARGET" "$@"
+COMBINE_LIBS_EOF
+    chmod +x scripts/build/combine_libs
+    # Remove the cached combined archive so make rebuilds it with the fixed script.
+    rm -f libtor.a
+fi
 if ! [ -x configure ] ; then
     ./autogen.sh || fail "Could not configure $pkgname"
 fi

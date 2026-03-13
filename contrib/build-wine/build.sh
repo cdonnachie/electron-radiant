@@ -69,12 +69,22 @@ FRESH_CLONE=`pwd`/contrib/build-wine/fresh_clone
 FRESH_CLONE_DIR="$FRESH_CLONE/$GIT_DIR_NAME"
 
 (
+    if [ -d "$FRESH_CLONE" ]; then
+        # On WSL/NTFS mounts, git submodules can leave Windows read-only file
+        # attributes that chmod cannot clear; use attrib.exe to strip them first.
+        FRESH_CLONE_WIN=$(wslpath -w "$FRESH_CLONE" 2>/dev/null)
+        if [ -n "$FRESH_CLONE_WIN" ]; then
+            attrib.exe -R "${FRESH_CLONE_WIN}\\*" /S /D 2>/dev/null || true
+        fi
+        chmod -R u+rw "$FRESH_CLONE" 2>/dev/null || true
+    fi
     $SUDO rm -fr "$FRESH_CLONE" && \
         mkdir -p "$FRESH_CLONE" && \
         cd "$FRESH_CLONE"  && \
         git clone "$GIT_REPO" && \
         cd "$GIT_DIR_NAME" && \
-        git checkout $REV
+        git checkout $REV && \
+        git submodule update --init
 ) || fail "Could not create a fresh clone from git"
 
 (
@@ -85,6 +95,7 @@ FRESH_CLONE_DIR="$FRESH_CLONE/$GIT_DIR_NAME"
     -e GIT_REPO="$GIT_REPO" \
     -e BUILD_DEBUG="$BUILD_DEBUG" \
     -e PYI_SKIP_TAG="$PYI_SKIP_TAG" \
+    -e GIT_SUBMODULE_SKIP=1 \
     --name ec-wine-builder-cont \
     -v "$FRESH_CLONE_DIR":/homedir/wine/drive_c/electronradiant:delegated \
     --rm \

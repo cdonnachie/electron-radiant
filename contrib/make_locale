@@ -8,6 +8,7 @@ from os.path import isdir, join
 from pathlib import Path
 import requests
 import shlex
+import shutil
 from subprocess import check_call
 import sys
 import zipfile
@@ -18,6 +19,7 @@ def run(cmd):
     check_call(shlex.split(cmd))
 
 original_dir = os.getcwd()
+locale_submodule = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'electrum-locale', 'locale')
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 os.chdir('..')
 
@@ -81,21 +83,40 @@ if crowdin_api_key:
     response = requests.request('GET', 'https://api.crowdin.com/api/project/' + crowdin_identifier + '/export?key=' + crowdin_api_key)
     print("", "export:", "-" * 20, response.text, "-" * 20, sep="\n")
 
-if len(sys.argv) < 2:
-    # Download & unzip
+if len(sys.argv) >= 2:
+    zfobj = zipfile.ZipFile(os.path.join(os.path.relpath(original_dir, os.getcwd()), sys.argv[1]))
+    print('Unzip translations')
+    for name in zfobj.namelist():
+        if name.endswith('/'):
+            if not os.path.exists(name):
+                os.mkdir(name)
+        else:
+            with open(name, 'wb') as output:
+                output.write(zfobj.read(name))
+elif os.path.isdir(locale_submodule) and os.listdir(locale_submodule):
+    print('Installing translations from local electrum-locale submodule')
+    for lang in os.listdir(locale_submodule):
+        lang_src = os.path.join(locale_submodule, lang)
+        if not os.path.isdir(lang_src):
+            continue
+        po_src = os.path.join(lang_src, 'electron-cash.po')
+        if not os.path.exists(po_src):
+            continue
+        msg_dir = os.path.join('locale', lang, 'LC_MESSAGES')
+        os.makedirs(msg_dir, exist_ok=True)
+        shutil.copy2(po_src, os.path.join(msg_dir, 'electron-cash.po'))
+else:
+    # Download & unzip from Crowdin
     s = requests.request('GET', 'https://crowdin.com/backend/download/project/' + crowdin_identifier + '.zip').content
     zfobj = zipfile.ZipFile(io.BytesIO(s))
-else:
-    zfobj = zipfile.ZipFile(os.path.join(os.path.relpath(original_dir, os.getcwd()), sys.argv[1]))
-
-print('Unzip translations')
-for name in zfobj.namelist():
-    if name.endswith('/'):
-        if not os.path.exists(name):
-            os.mkdir(name)
-    else:
-        with open(name, 'wb') as output:
-            output.write(zfobj.read(name))
+    print('Unzip translations')
+    for name in zfobj.namelist():
+        if name.endswith('/'):
+            if not os.path.exists(name):
+                os.mkdir(name)
+        else:
+            with open(name, 'wb') as output:
+                output.write(zfobj.read(name))
 
 # Convert .po to .mo
 print('Installing')

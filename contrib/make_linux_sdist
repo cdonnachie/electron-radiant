@@ -14,6 +14,14 @@ pushd "$contrib"/..
 # EC_PACKAGE_VERSION and EC_PACKAGE_NAME are used by setup.py to specify
 # generated filename with a version from git tag. Otherwise defaults are used.
 EC_PACKAGE_VERSION=`git_describe_filtered` || fail "Could not get determine git tag version"
+# If git describe returned just a commit hash (no tag found), it is not a valid
+# PEP 440 version string and setuptools will reject it.  Fall back to the
+# PACKAGE_VERSION declared in electroncash/version.py instead.
+if ! echo "$EC_PACKAGE_VERSION" | grep -qE '^[0-9]+\.[0-9]'; then
+    warn "git describe returned '$EC_PACKAGE_VERSION' (no version tag found), falling back to PACKAGE_VERSION from version.py"
+    EC_PACKAGE_VERSION=$(grep "^PACKAGE_VERSION" electroncash/version.py | sed "s/.*'\(.*\)'.*/\1/") \
+        || fail "Could not read PACKAGE_VERSION from electroncash/version.py"
+fi
 EC_PACKAGE_NAME="${PACKAGE}"
 export EC_PACKAGE_VERSION EC_PACKAGE_NAME
 

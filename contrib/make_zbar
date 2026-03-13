@@ -9,15 +9,27 @@ pkgname="zbar"
 info "Building $pkgname..."
 
 pushd "$here"/$pkgname || fail "Could not chdir to $here/$pkgname"
+if [ "$BUILD_TYPE" = "darwin" ] && [ -n "$(which brew 2>/dev/null)" ] ; then
+    # On macOS with Homebrew, aclocal needs to find macros installed by brew packages
+    # (gettext, libtool, etc.) which live in $(brew --prefix)/share/aclocal
+    export ACLOCAL_PATH="$(brew --prefix)/share/aclocal${ACLOCAL_PATH:+:$ACLOCAL_PATH}"
+    # macOS ships BSD m4 which lacks GNU extensions required by autoconf.
+    # Prepend GNU m4 to PATH so autoreconf, aclocal, and autoconf all use it.
+    export PATH="$(brew --prefix m4)/bin:$PATH"
+fi
 if [ "$BUILD_TYPE" = "wine" ] ; then
     echo "libzbar_la_LDFLAGS += -Wc,-static" >> zbar/Makefile.am
     echo "LDFLAGS += -Wc,-static" >> Makefile.am
 fi
-if ! [ -x configure ] ; then
-    autoreconf -vfi || fail "Could not run autoreconf for $pkgname. Please make sure you have automake and libtool installed, and try again."
-fi
+autoreconf -vfi || fail "Could not run autoreconf for $pkgname. Please make sure you have automake and libtool installed, and try again."
 if ! [ -r config.status ] ; then
-    ./configure \
+    # On macOS, brew's gettext uses its own libiconv which isn't linked automatically.
+    # Pass -liconv via LDFLAGS env var prefix (safe to leave empty on Linux).
+    ZBAR_LDFLAGS=""
+    if [ "$BUILD_TYPE" = "darwin" ] ; then
+        ZBAR_LDFLAGS="-liconv"
+    fi
+    LDFLAGS="$ZBAR_LDFLAGS" ./configure \
         $AUTOCONF_FLAGS \
         --prefix="$here/$pkgname/dist" \
         --with-x=no \

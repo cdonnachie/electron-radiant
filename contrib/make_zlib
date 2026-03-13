@@ -9,6 +9,13 @@ pkgname="zlib"
 info "Building $pkgname..."
 
 pushd "$here"/$pkgname || fail "Could not chdir to $here/$pkgname"
+
+if [ "$BUILD_TYPE" = "darwin" ] ; then
+    # zutil.h defines fdopen(fd,mode)=NULL for old pre-OSX Macs (TARGET_OS_MAC).
+    # Modern macOS has fdopen() and this macro causes <stdio.h> parse errors.
+    sed -i '' '/^#        define fdopen(fd,mode) NULL/d' zutil.h
+fi
+
 if [ "$BUILD_TYPE" = "wine" ] ; then
     PREFIXDIR="$here/$pkgname/dist"
     make -j$WORKER_COUNT -fwin32/Makefile.gcc \

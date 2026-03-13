@@ -76,7 +76,7 @@ have_brew=`which brew`
 have_macports=`which port`
 if [ -n "$have_brew" ]; then
     info "Ensuring build prerequisites are installed via brew"
-    for a in autoconf automake coreutils gettext libtool openssl@1.1 readline sqlite3 xz zlib swig ; do
+    for a in autoconf automake coreutils gettext libtool m4 openssl@3 readline sqlite3 xz zlib swig ; do
         brew list $a > /dev/null 2>&1
         if [ "$?" != "0" ]; then
             info "Installing $a"
@@ -121,7 +121,7 @@ else
 fi
 # The below just switches to this python version if already installed..
 # or does a build-install from the file in ~/.pyenv/cache if not installed
-PYTHON_CONFIGURE_OPTS="--enable-framework" pyenv install -s $PYTHON_VERSION && \
+PYTHON_CONFIGURE_OPTS="--enable-framework --with-openssl=$(brew --prefix openssl@3)" pyenv install -s $PYTHON_VERSION && \
     pyenv global $PYTHON_VERSION && pyenv rehash || \
     fail "Unable to use Python $PYTHON_VERSION"
 
@@ -192,7 +192,14 @@ pyinstaller --version
 rm -rf ./dist
 
 info "Making locale..."
-python3 ./contrib/make_locale || fail "Failed to make locale..."
+(
+    cd contrib/electrum-locale
+    for i in ./locale/*; do
+        dir="$(pwd)/../../electroncash/$i/LC_MESSAGES"
+        mkdir -p "$dir"
+        msgfmt --output-file="$dir/electron-cash.mo" "$i/electron-cash.po" || true
+    done
+) || fail "Failed to make locale..."
 
 info "Downloading libusb..."
 curl -L https://github.com/cculianu/Electron-Cash-Build-Tools/releases/download/v1.0/libusb-1.0.21.el_capitan.bottle.tar.gz | \
@@ -239,6 +246,10 @@ info "Building $PACKAGE..."
 python3 setup.py install --user > /dev/null || fail "Could not build $PACKAGE"
 
 info "Building binary"
+python3 -m pip install --user --quiet "packaging>=22.0" || fail "Could not upgrade packaging"
+# pyinstaller-hooks-contrib >= 2021.4 uses PyInstaller.isolated (added in 4.4+).
+# Pin to 2021.3, the last version compatible with our pinned PyInstaller 4.3.
+python3 -m pip install --user --quiet "pyinstaller-hooks-contrib==2021.3" || fail "Could not pin pyinstaller-hooks-contrib"
 pyinstaller --clean --noconfirm --ascii --name $VERSION contrib/osx/osx.spec || fail "Could not build binary"
 
 info "Adding bitcoincash & cashacct URI types to Info.plist"
